@@ -1,8 +1,17 @@
 const nodemailer = require("nodemailer");
 const users = require("./users.json");
 
-const jourCommande = "mardi"; // ← fixe pour test, fonctionne tous les jours
-console.log("🔁 Test forcé - envoi simulé pour mardi");
+const today = new Date().getDay(); // 0 = dimanche, 1 = lundi, ..., 6 = samedi
+const jours = { 1: "mardi", 2: "jeudi", 5: "lundi" };
+const jourCommande = jours[today];
+
+if (!jourCommande) {
+  console.log("⏱️ Pas de rappel aujourd'hui (ni lundi, mardi, ni vendredi).");
+  process.exit(0);
+}
+
+console.log(`📅 Envoi des mails de rappel pour le jour : ${jourCommande}`);
+
 
 
 const transporter = nodemailer.createTransport({
