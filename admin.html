@@ -1,0 +1,101 @@
+<!-- ADMIN.HTML AVEC FILTRE SEMAINE + COMPTEUR DE PLATS -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Commandes Repas</title>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+  <div class="max-w-5xl mx-auto">
+    <h1 class="text-3xl font-bold mb-6 text-center">Panneau Administrateur - Commandes Repas</h1>
+    <div class="mb-4 flex gap-4 justify-center">
+      <button onclick="afficherCommandes('lundi')" class="bg-blue-600 text-white px-4 py-2 rounded-xl">Lundi</button>
+      <button onclick="afficherCommandes('mardi')" class="bg-blue-600 text-white px-4 py-2 rounded-xl">Mardi</button>
+      <button onclick="afficherCommandes('jeudi')" class="bg-blue-600 text-white px-4 py-2 rounded-xl">Jeudi</button>
+    </div>
+    <div id="tableau" class="bg-white rounded-xl shadow p-4 overflow-x-auto">
+      <p class="text-center text-gray-500">Sélectionne un jour pour afficher les commandes.</p>
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAHs4bcBzBpDpYk8UDs9nSe11XvqrEZczc",
+      authDomain: "panorama--repas.firebaseapp.com",
+      projectId: "panorama--repas",
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    function getLastDateForJour(jourTexte) {
+      const today = new Date();
+      const jours = { dimanche: 0, lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6 };
+      const targetDay = jours[jourTexte];
+      const result = new Date(today);
+      result.setDate(today.getDate() - ((today.getDay() + 7 - targetDay) % 7));
+      result.setHours(0, 0, 0, 0);
+      return result;
+    }
+
+    async function afficherCommandes(jour) {
+      const tableau = document.getElementById("tableau");
+      tableau.innerHTML = `<p class='text-center'>Chargement des commandes pour <strong>${jour}</strong>...</p>`;
+
+      const startDate = getLastDateForJour(jour);
+
+      const snap = await db.collection("commandes")
+        .where("jour", "==", jour)
+        .where("timestamp", ">=", startDate)
+        .orderBy("timestamp", "asc")
+        .get();
+
+      if (snap.empty) {
+        tableau.innerHTML = `<p class='text-center text-red-500'>Aucune commande pour ${jour} cette semaine.</p>`;
+        return;
+      }
+
+      let html = `
+        <table class='w-full table-auto mb-6'>
+          <thead>
+            <tr class='bg-gray-200'>
+              <th class='p-2 text-left'>Prénom</th>
+              <th class='p-2 text-left'>Plat</th>
+              <th class='p-2 text-left'>Date commande</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      const compteurs = {};
+      snap.forEach(doc => {
+        const data = doc.data();
+        const date = data.timestamp?.toDate().toLocaleString("fr-FR") || "-";
+        html += `
+          <tr class='border-t'>
+            <td class='p-2'>${data.prenom}</td>
+            <td class='p-2'>${data.plat}</td>
+            <td class='p-2 text-sm text-gray-500'>${date}</td>
+          </tr>
+        `;
+
+        if (!compteurs[data.plat]) compteurs[data.plat] = 0;
+        compteurs[data.plat]++;
+      });
+
+      html += `</tbody></table>`;
+
+      html += `<h2 class='text-lg font-bold mb-2'>Résumé des plats :</h2><ul class='list-disc ml-6'>`;
+      for (let plat in compteurs) {
+        html += `<li><strong>${compteurs[plat]} x</strong> ${plat}</li>`;
+      }
+      html += `</ul>`;
+
+      tableau.innerHTML = html;
+    }
+  </script>
+</body>
+</html>

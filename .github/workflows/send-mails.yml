@@ -1,0 +1,27 @@
+name: Envoi des rappels par mail
+
+on:
+  schedule:
+    - cron: '0 6 * * 1,2,5' # Lundi, mardi, vendredi à 8h heure de Paris (6h UTC)
+  workflow_dispatch: # Permet de lancer manuellement si besoin
+
+jobs:
+  sendEmails:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Cloner le dépôt
+        uses: actions/checkout@v3
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Installer nodemailer
+        run: npm install nodemailer
+
+      - name: Envoyer les mails de rappel
+        env:
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+        run: node sendRappelEmails.js

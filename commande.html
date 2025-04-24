@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Commande de repas</title>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white p-6 rounded-2xl shadow-xl max-w-3xl w-full text-center">
+    <h1 class="text-2xl font-bold mb-4">Commande de repas du midi</h1>
+    <form id="commandeForm" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium mb-2">Choisis ton plat</label>
+        <div id="cartePlats" class="grid sm:grid-cols-2 gap-4"></div>
+        <input type="hidden" id="plat" required />
+      </div>
+      <p id="message" class="text-sm text-red-500 hidden"></p>
+      <button id="submitBtn" type="submit" class="w-full bg-blue-600 text-white py-2 rounded-xl hover:bg-blue-700 flex items-center justify-center gap-2">
+        <span>Envoyer ma commande</span>
+        <svg id="spinner" class="animate-spin h-5 w-5 text-white hidden" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+      </button>
+    </form>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAHs4bcBzBpDpYk8UDs9nSe11XvqrEZczc",
+      authDomain: "panorama--repas.firebaseapp.com",
+      projectId: "panorama--repas",
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const form = document.getElementById('commandeForm');
+    const platInput = document.getElementById('plat');
+    const cartePlats = document.getElementById('cartePlats');
+    const message = document.getElementById('message');
+    const submitBtn = document.getElementById('submitBtn');
+    const spinner = document.getElementById('spinner');
+
+    const plats = [
+      { nom: "Scampi du chef", desc: "scampi sauce crème, chèvre, riz" },
+      { nom: "Ris de veau", desc: "poêlé, sauce champignons, pommes grenaille" },
+      { nom: "Filet de poulet", desc: "grillé, sauce champignons, gratin" },
+      { nom: "Souris d’agneau", desc: "au thym, pommes grenaille" },
+      { nom: "Carbonnade flamande", desc: "pommes grenaille et haricots verts" },
+      { nom: "Magret de canard", desc: "sauce poivre vert, gratin" },
+      { nom: "Filet de saumon", desc: "grillé, riz et endive braisée" },
+      { nom: "Boeuf chumichurri", desc: "tagliatelle, sauce roquette parmesan" }
+    ];
+
+    plats.forEach(p => {
+      const card = document.createElement('div');
+      card.className = "cursor-pointer p-4 border rounded-xl bg-white hover:bg-blue-50 transition shadow";
+      card.innerHTML = `<strong>${p.nom}</strong><br><span class='text-sm text-gray-600'>${p.desc}</span>`;
+      card.onclick = () => {
+        platInput.value = p.nom;
+        document.querySelectorAll('#cartePlats div').forEach(el => el.classList.remove('ring', 'ring-blue-500'));
+        card.classList.add('ring', 'ring-blue-500');
+      };
+      cartePlats.appendChild(card);
+    });
+
+    firebase.auth().onAuthStateChanged(async user => {
+      if (!user) return window.location.href = "login.html";
+      const email = user.email;
+      const prenom = email.split('@')[0].split('.')[0];
+
+      const userRef = db.collection("utilisateurs").doc(user.uid);
+      const doc = await userRef.get();
+      if (!doc.exists) {
+        await userRef.set({
+          email,
+          prenom,
+          nom: user.displayName || "",
+          inscritLe: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+
+      const now = new Date();
+      const jour = now.getDay();
+      const heure = now.getHours();
+      const minutes = now.getMinutes();
+      const currentTime = heure * 60 + minutes;
+
+      let jourCommande = null;
+      if (jour === 5 && currentTime >= 480 && currentTime <= 630) jourCommande = "lundi";
+      if (jour === 1 && currentTime >= 480 && currentTime <= 630) jourCommande = "mardi";
+      if (jour === 2 && currentTime >= 480 && currentTime <= 630) jourCommande = "jeudi";
+
+      if (!jourCommande) {
+        message.classList.remove('hidden');
+        message.textContent = "⛔ Les commandes sont fermées pour aujourd'hui.";
+        form.querySelector('button').disabled = true;
+        return;
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const plat = platInput.value;
+        if (!plat) return;
+
+        // Loading
+        spinner.classList.remove('hidden');
+        submitBtn.disabled = true;
+
+        const startOfWeek = new Date();
+        startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        const exist = await db.collection("commandes")
+          .where("jour", "==", jourCommande)
+          .where("prenom", "==", prenom.toLowerCase())
+          .where("timestamp", ">=", startOfWeek)
+          .get();
+
+        if (!exist.empty) {
+          alert("🚫 Tu as déjà commandé pour " + jourCommande);
+          spinner.classList.add('hidden');
+          submitBtn.disabled = false;
+          return;
+        }
+
+        await db.collection("commandes").add({
+          prenom: prenom.toLowerCase(),
+          plat,
+          jour: jourCommande,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        alert("✅ Commande enregistrée pour " + jourCommande + " !");
+        form.reset();
+        document.querySelectorAll('#cartePlats div').forEach(el => el.classList.remove('ring', 'ring-blue-500'));
+        spinner.classList.add('hidden');
+        submitBtn.disabled = false;
+      });
+    });
+  </script>
+</body>
+</html>
