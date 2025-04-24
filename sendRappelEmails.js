@@ -8,7 +8,7 @@ console.log("🔁 Test forcé - envoi simulé pour mardi");
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: "ton.email@gmail.com", // remplace avec ton adresse Gmail
+    user: "panorama.theo@gmail.com", // remplace avec ton adresse Gmail
     pass: process.env.SMTP_PASS   // sera injecté via GitHub Actions
   }
 });
